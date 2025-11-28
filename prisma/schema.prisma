@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  image         String?   // Avatar del usuario
+  createdAt     DateTime  @default(now())
+  
+  // Relación con el portafolio
+  portfolio     Portfolio?
+}
+
+model Portfolio {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Datos públicos del Barista
+  slug          String    @unique // Para la url: mibarista.com/p/juan-coffee
+  title         String    // Ej: "Juan Pérez - Master Roaster"
+  bio           String?   @db.Text
+  heroImage     String?   // Imagen principal (como la taza derramándose)
+  primaryColor  String    @default("#D4A373") // El usuario elige su acento
+  
+  // Redes Sociales (Json es suficiente para MVP)
+  socials       Json?     // { instagram: "url", linkedin: "url" }
+  
+  // Secciones dinámicas
+  sections      Section[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Section {
+  id            String    @id @default(cuid())
+  portfolioId   String
+  portfolio     Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  
+  title         String    // Ej: "Mi Experiencia", "Certificaciones", "Latte Art"
+  type          String    // "text", "gallery", "timeline"
+  content       Json      // Flexible según el tipo
+  order         Int       @default(0)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
