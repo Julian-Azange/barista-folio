@@ -1,35 +1,23 @@
 import { BaristaCard } from "@/components/barista-card";
-import { Button } from "@/components/ui/button"; // Importamos botón de Shadcn
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs"; // Componentes de Clerk
+import { Button } from "@/components/ui/button";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { ArrowRight, Coffee } from "lucide-react";
+import { db } from "@/lib/db"; // <--- Importamos la DB
 
-// Datos dummy (los mantenemos por ahora mientras hay pocos usuarios reales)
-const MOCK_BARISTAS = [
-    {
-        name: "Valentina Roa",
-        slug: "valen-coffee",
-        role: "Specialty Brewer",
-        imageUrl: "https://images.unsplash.com/photo-1518057111178-44a106bad636?q=80&w=688&auto=format&fit=crop",
-        color: "#D4A373"
-    },
-    {
-        name: "Carlos Méndez",
-        slug: "carlos-barista",
-        role: "Latte Art Champion",
-        imageUrl: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?q=80&w=1000&auto=format&fit=crop",
-        color: "#2A9D8F"
-    },
-    {
-        name: "Sofía Black",
-        slug: "sofia-roast",
-        role: "Master Roaster",
-        imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=687&auto=format&fit=crop",
-        color: "#E76F51"
-    }
-];
+// Esto asegura que la página siempre busque datos frescos y no use caché vieja
+export const revalidate = 0;
 
-export default function Home() {
+export default async function Home() {
+    // 1. CONSULTA A LA BASE DE DATOS
+    const portfolios = await db.portfolio.findMany({
+        orderBy: { createdAt: 'desc' }, // Los más recientes primero
+        take: 9, // Traemos máximo 9 para no saturar
+        include: {
+            user: true // Necesitamos datos del usuario (nombre, foto por defecto)
+        }
+    });
+
     return (
         <main className="min-h-screen bg-background relative selection:bg-primary selection:text-black">
 
@@ -43,7 +31,6 @@ export default function Home() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Si NO está logueado, mostramos Login */}
                     <SignedOut>
                         <Link href="/sign-in">
                             <Button variant="ghost" className="hover:text-primary">Iniciar Sesión</Button>
@@ -55,7 +42,6 @@ export default function Home() {
                         </Link>
                     </SignedOut>
 
-                    {/* Si YA está logueado, mostramos Dashboard y Avatar */}
                     <SignedIn>
                         <Link href="/dashboard">
                             <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10">
@@ -69,7 +55,6 @@ export default function Home() {
 
             {/* --- HERO SECTION --- */}
             <section className="relative pt-40 pb-20 px-4 md:px-8 max-w-7xl mx-auto text-center">
-                {/* Glow Effect de fondo */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px] -z-10 pointer-events-none" />
 
                 <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6">
@@ -80,10 +65,9 @@ export default function Home() {
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-10">
                     Descubre a los mejores baristas, tostadores y catadores.
-                    Explora sus trayectorias, certificaciones y estilo único en una plataforma diseñada para el gremio.
+                    Explora sus trayectorias, certificaciones y estilo único.
                 </p>
 
-                {/* Botones de Acción Principal (CTA) */}
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                     <SignedOut>
                         <Link href="/sign-up">
@@ -108,18 +92,37 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* --- GRID DE PORTAFOLIOS --- */}
+            {/* --- GRID DE PORTAFOLIOS REALES --- */}
             <section id="explore" className="px-4 md:px-8 max-w-7xl mx-auto pb-20">
                 <div className="flex items-center justify-between mb-8">
                     <h2 className="text-2xl font-bold text-white">Baristas Destacados</h2>
-                    <span className="text-sm text-muted-foreground">Mostrando selección</span>
+                    <span className="text-sm text-muted-foreground">Más recientes</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {MOCK_BARISTAS.map((barista) => (
-                        <BaristaCard key={barista.slug} {...barista} />
-                    ))}
-                </div>
+                {portfolios.length === 0 ? (
+                    // 2. ESTADO VACÍO (Si nadie se ha registrado aún)
+                    <div className="text-center py-20 border border-dashed border-white/10 rounded-2xl bg-white/5">
+                        <p className="text-muted-foreground mb-4">Aún no hay perfiles públicos.</p>
+                        <Link href="/sign-up">
+                            <Button variant="link" className="text-primary">¡Sé el primero en aparecer aquí!</Button>
+                        </Link>
+                    </div>
+                ) : (
+                    // 3. MAPEO DE DATOS REALES
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {portfolios.map((portfolio) => (
+                            <BaristaCard
+                                key={portfolio.id}
+                                name={portfolio.user.name || "Barista"}
+                                slug={portfolio.slug}
+                                role={portfolio.title}
+                                // Prioridad de imagen: 1. Hero subido -> 2. Avatar de Clerk -> 3. Placeholder
+                                imageUrl={portfolio.heroImage || portfolio.user.image || "https://images.unsplash.com/photo-1511537632536-34a74592df48?q=80&w=1000&auto=format&fit=crop"}
+                                color={portfolio.primaryColor}
+                            />
+                        ))}
+                    </div>
+                )}
             </section>
         </main>
     );
